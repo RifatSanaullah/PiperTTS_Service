@@ -8,7 +8,7 @@ import numpy as np
 import soundfile as sf
 from piper import PiperVoice
 from piper.config import SynthesisConfig
-from app.config import settings
+from config import settings
 from pydub import AudioSegment
 from contextlib import asynccontextmanager
 
@@ -18,14 +18,25 @@ syn_config = None
 async def lifespan(app: FastAPI):
     # Load the ML model during startup
     global voice, syn_config
-    # Assuming Piper voice model and config are accessible globally or passed in
-    VOICE_MODEL_PATH = settings.piper_tts_file_path
-    voice = PiperVoice.load(VOICE_MODEL_PATH, use_cuda=True)
-    syn_config = SynthesisConfig(
-        noise_scale= 0.5,
-        length_scale=1.05,
-        noise_w_scale=0.8
-    )
+    try:
+        VOICE_MODEL_PATH = settings.piper_tts_file_path
+        print(f"Loading voice model from: {VOICE_MODEL_PATH}")
+        voice = PiperVoice.load(VOICE_MODEL_PATH, use_cuda=True)
+        syn_config = SynthesisConfig(
+            noise_scale=0.5,
+            length_scale=1.05,
+            noise_w_scale=0.8
+        )
+        print("Voice model loaded successfully!")
+        yield
+    except Exception as e:
+        print(f"Failed to load voice model: {e}")
+        import traceback
+        traceback.print_exc()
+        yield  # Still yield even if loading fails
+    finally:
+        # Cleanup code can go here
+        pass
 
 
 def wav_to_twilio_mulaw(wav_io):
@@ -41,7 +52,7 @@ def wav_to_twilio_mulaw(wav_io):
 
     return mulaw_data  # raw bytes, no header
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # Load TTS model (using Microsoft's VITS model as example)
 voice = None
